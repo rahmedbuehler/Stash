@@ -1,5 +1,5 @@
 /*
-** showip.c -- show IP addresses for a host given on the command line
+** showip.cpp -- show IP addresses for a host given on the command line
 */
 
 #include <iostream>
@@ -58,8 +58,7 @@ int main(int argc, char* argv[])
         printf("  %s: %s\n", ipver, ipstr);
     }
 
-    freeaddrinfo(result); // free the linked list
-    std::cout << "Well hello there!";
+    freeaddrinfo(result); // free the (dynamically-allocated) linked list
 
     return 0;
 }
