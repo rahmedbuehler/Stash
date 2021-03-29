@@ -1,7 +1,3 @@
-/*
-** client.c -- a stream socket client demo
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -19,7 +15,7 @@
 #define MAXDATASIZE 100 // max number of bytes we can get at once 
 
 // get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
+void* get_in_addr(struct sockaddr * sa)
 {
 	if (sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -30,9 +26,11 @@ void *get_in_addr(struct sockaddr *sa)
 
 int main(int argc, char *argv[])
 {
-	int sockfd, numbytes;  
+	int sockfd, numbytes;
 	char buf[MAXDATASIZE];
-	struct addrinfo hints, *servinfo, *p;
+        struct addrinfo hints {};
+	struct addrinfo * servinfo;
+        struct addrinfo * p;
 	int rv;
 	char s[INET6_ADDRSTRLEN];
 
@@ -41,7 +39,7 @@ int main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	memset(&hints, 0, sizeof hints);
+	// memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 

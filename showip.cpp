@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
 
 
     // <addrinfo> struct is used to prep socket address structures for use along with host name and service name lookups.  Members start with "ai_".  <ai_addr> is a pointer to a <sockaddr> struct, members of this start with "sa_"
-    struct addrinfo hints = {};
+    struct addrinfo hints {};
     hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
     hints.ai_socktype = SOCK_STREAM;
 
