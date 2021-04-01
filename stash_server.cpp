@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <unistd.h> //fork
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
@@ -39,7 +39,7 @@ void *get_in_addr(struct sockaddr *sa)
 int main(void)
 {
     int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
-    struct addrinfo hints {};
+    struct addrinfo hints {0};
     struct addrinfo *servinfo, *p;
     struct sockaddr_storage their_addr; // connector's address information
     socklen_t sin_size;
@@ -116,7 +116,8 @@ int main(void)
             s, sizeof s);
         printf("server: got connection from %s\n", s);
 
-        if (!fork()) { // this is the child process
+        if (!fork()) 
+        { // this is the child process
             close(sockfd); // child doesn't need the listener
             if (send(new_fd, "Hello, world!", 13, 0) == -1)
                 perror("send");
