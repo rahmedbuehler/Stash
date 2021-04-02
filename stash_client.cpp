@@ -10,10 +10,6 @@
 #include <sys/socket.h> //getpeername
 #include <arpa/inet.h>
 
-#define PORT "3490" // the port client will be connecting to 
-
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
-
 // get sockaddr, IPv4 or IPv6:
 void* get_in_addr(struct sockaddr * sa)
 {
@@ -24,18 +20,21 @@ void* get_in_addr(struct sockaddr * sa)
         return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int main(int argc, char *argv[])
+int connect_to_server()
 {
     struct addrinfo hints {0};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
+    // Temporary while current host is server
+    char server[256];
+    gethostname(server, sizeof(server));
+    const char* port{"3490"};
+
     // Get acceptable addrinfo structs
-    char host[256];
-    gethostname(host, sizeof(host));
     struct addrinfo * gai_result;
     int gai_return_value;
-    gai_return_value = getaddrinfo(host, PORT, &hints, &gai_result);
+    gai_return_value = getaddrinfo(server, port, &hints, &gai_result);
     if (gai_return_value != 0)
     {
         std::cerr << "getaddrinfo Error: " << gai_strerror(gai_return_value) << "\n";
@@ -45,7 +44,7 @@ int main(int argc, char *argv[])
     // Loop through all the results and connect to the first we can
     int sockfd;
     struct addrinfo * current_ai;
-    for(current_ai = gai_result; current_ai != NULL; current_ai = current_ai->ai_next)
+    for(current_ai = gai_result; current_ai != nullptr; current_ai = current_ai->ai_next)
     {
         sockfd = socket(current_ai->ai_family, current_ai->ai_socktype, current_ai->ai_protocol);
         if (sockfd == -1)
@@ -63,9 +62,9 @@ int main(int argc, char *argv[])
     }
 
     // No connection found
-    if (current_ai == NULL)
+    if (current_ai == nullptr)
     {
-        std::cerr << "Error: Failed to connect\n";
+        std::cerr << "stash_client: Failed to connect\n";
         return 2;
     }
 
@@ -74,18 +73,25 @@ int main(int argc, char *argv[])
     std::cout << "stash_client: connecting to " << s << "\n";
 
     freeaddrinfo(gai_result);
+    return sockfd;
+}
 
-    char buf[MAXDATASIZE];
-    int numbytes;
-    if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
+int main(int argc, char *argv[])
+{
+    int server_sockfd {connect_to_server()};
+    int maxdatasize {100};
+    char buf[maxdatasize];
+    long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
+    if (numbytes == -1)
     {
         std::perror("stash_client - recv operation");
         return 1;
     }
-    buf[numbytes] = '\0';
+    buf[numbytes] = '\0'; // is this guaranteed to be in buf?
+    std::cout << "stash_client: received " << numbytes << " bytes";
     std::cout << "stash_client: received '" << buf <<"'\n";
 
-    close(sockfd);
+    close(server_sockfd);
 
     return 0;
 }
