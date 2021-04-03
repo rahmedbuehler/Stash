@@ -8,16 +8,16 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h> //getpeername
-#include <arpa/inet.h>
+#include <arpa/inet.h> //inet_pton
 
 // get sockaddr, IPv4 or IPv6:
 void* get_in_addr(struct sockaddr * sa)
 {
         if (sa->sa_family == AF_INET) {
-                return &(((struct sockaddr_in*)sa)->sin_addr);
+                return &(static_cast<struct sockaddr_in*>(sa)->sin_addr);
         }
 
-        return &(((struct sockaddr_in6*)sa)->sin6_addr);
+        return &(static_cast<struct sockaddr_in6*>(sa)->sin6_addr);
 }
 
 int connect_to_server()
@@ -37,8 +37,7 @@ int connect_to_server()
     gai_return_value = getaddrinfo(server, port, &hints, &gai_result);
     if (gai_return_value != 0)
     {
-        std::cerr << "getaddrinfo Error: " << gai_strerror(gai_return_value) << "\n";
-        return 1;
+        throw gair_strerror(gai_return_value);
     }
 
     // Loop through all the results and connect to the first we can
@@ -64,13 +63,12 @@ int connect_to_server()
     // No connection found
     if (current_ai == nullptr)
     {
-        std::cerr << "stash_client: Failed to connect\n";
-        return 2;
+        throw "stash_client failed to connect";
     }
 
-    char s[INET6_ADDRSTRLEN];
-    inet_ntop(current_ai->ai_family, get_in_addr((struct sockaddr *)current_ai->ai_addr),s, sizeof s);
-    std::cout << "stash_client: connecting to " << s << "\n";
+    char ip_string[INET6_ADDRSTRLEN];
+    inet_ntop(current_ai->ai_family, get_in_addr(static_cast<struct sockaddr *>(current_ai->ai_addr),ip_string, sizeof ip_string);
+    std::cout << "stash_client: connecting to " << ip_string << "\n";
 
     freeaddrinfo(gai_result);
     return sockfd;
@@ -78,21 +76,28 @@ int connect_to_server()
 
 int main(int argc, char *argv[])
 {
-    int server_sockfd {connect_to_server()};
-    int maxdatasize {100};
-    char buf[maxdatasize];
-    long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
-    if (numbytes == -1)
+    try
     {
-        std::perror("stash_client - recv operation");
-        return 1;
+        int server_sockfd {connect_to_server()};
+        int maxdatasize {100};
+        char buf[maxdatasize];
+        long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
+        if (numbytes == -1)
+        {
+            std::perror("stash_client - recv operation");
+            throw "stash_client recv failed";
+        }
+        buf[numbytes] = '\0'; // is this guaranteed to be in buf?
+        std::cout << "stash_client: received " << numbytes << " bytes";
+        std::cout << "stash_client: received '" << buf <<"'\n";
+
+        close(server_sockfd);
     }
-    buf[numbytes] = '\0'; // is this guaranteed to be in buf?
-    std::cout << "stash_client: received " << numbytes << " bytes";
-    std::cout << "stash_client: received '" << buf <<"'\n";
-
-    close(server_sockfd);
-
+    catch (...)
+    {
+        std::cerr << "An unexpected exception occurred";
+        return -1;
+    }
     return 0;
 }
 
