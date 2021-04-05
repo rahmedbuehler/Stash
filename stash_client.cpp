@@ -11,13 +11,13 @@
 #include <arpa/inet.h> //inet_pton
 
 // get sockaddr, IPv4 or IPv6:
-void* get_in_addr(struct sockaddr * sa)
+void * get_in_addr(struct sockaddr * sa)
 {
-        if (sa->sa_family == AF_INET) {
-                return &(static_cast<struct sockaddr_in*>(sa)->sin_addr);
+        if (sa->sa_family == AF_INET)
+        {
+            return &(((struct sockaddr_in *)sa)->sin_addr);
         }
-
-        return &(static_cast<struct sockaddr_in6*>(sa)->sin6_addr);
+        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
 int connect_to_server()
@@ -37,7 +37,7 @@ int connect_to_server()
     gai_return_value = getaddrinfo(server, port, &hints, &gai_result);
     if (gai_return_value != 0)
     {
-        throw gair_strerror(gai_return_value);
+        throw gai_strerror(gai_return_value);
     }
 
     // Loop through all the results and connect to the first we can
@@ -67,7 +67,7 @@ int connect_to_server()
     }
 
     char ip_string[INET6_ADDRSTRLEN];
-    inet_ntop(current_ai->ai_family, get_in_addr(static_cast<struct sockaddr *>(current_ai->ai_addr),ip_string, sizeof ip_string);
+    inet_ntop(current_ai->ai_family, get_in_addr(static_cast<struct sockaddr *>(current_ai->ai_addr)), ip_string, sizeof ip_string);
     std::cout << "stash_client: connecting to " << ip_string << "\n";
 
     freeaddrinfo(gai_result);
@@ -88,15 +88,14 @@ int main(int argc, char *argv[])
             throw "stash_client recv failed";
         }
         buf[numbytes] = '\0'; // is this guaranteed to be in buf?
-        std::cout << "stash_client: received " << numbytes << " bytes";
+        std::cout << "stash_client: received " << numbytes << " bytes\n";
         std::cout << "stash_client: received '" << buf <<"'\n";
 
         close(server_sockfd);
     }
     catch (...)
     {
-        std::cerr << "An unexpected exception occurred";
-        return -1;
+        std::cerr << "stash_client: an unexpected exception occurred.\n";
     }
     return 0;
 }
