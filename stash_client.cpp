@@ -10,7 +10,7 @@
 #include <sys/socket.h> //getpeername
 #include <arpa/inet.h> //inet_pton
 
-// get sockaddr, IPv4 or IPv6:
+// Returns pointer to the <sin_addr> or <sin6_addr> in <sa>
 void * get_in_addr(struct sockaddr * sa)
 {
         if (sa->sa_family == AF_INET)
@@ -20,6 +20,7 @@ void * get_in_addr(struct sockaddr * sa)
         return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
+// Returns socket file descriptor for the Stash server
 int connect_to_server()
 {
     struct addrinfo hints {0};
@@ -66,6 +67,7 @@ int connect_to_server()
         throw "stash_client failed to connect";
     }
 
+    // Output
     char ip_string[INET6_ADDRSTRLEN];
     inet_ntop(current_ai->ai_family, get_in_addr(static_cast<struct sockaddr *>(current_ai->ai_addr)), ip_string, sizeof ip_string);
     std::cout << "stash_client: connecting to " << ip_string << "\n";
@@ -87,7 +89,7 @@ int main(int argc, char *argv[])
             std::perror("stash_client - recv operation");
             throw "stash_client recv failed";
         }
-        buf[numbytes] = '\0'; // is this guaranteed to be in buf?
+        buf[numbytes] = '\0';
         std::cout << "stash_client: received " << numbytes << " bytes\n";
         std::cout << "stash_client: received '" << buf <<"'\n";
 

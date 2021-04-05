@@ -23,7 +23,7 @@ void sigchld_handler(int s)
 }
 
 
-// get sockaddr, IPv4 or IPv6:
+// Returns <sin6_addr> or <sin_addr> depending on <sa>
 void * get_in_addr(struct sockaddr * sa)
 {
     if (sa->sa_family == AF_INET)
@@ -40,6 +40,7 @@ int setup_server ()
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
 
+    // Get linked list of address info
     struct addrinfo * gai_server_info;
     const char * port {"3490"};
     int gai_return_value {getaddrinfo(nullptr, port, &hints, &gai_server_info)};
@@ -48,7 +49,7 @@ int setup_server ()
         throw gai_strerror(gai_return_value);
     }
 
-    // loop through all the <gai_server_info> results and bind to the first we can
+    // Loop through all the <gai_server_info> results and bind to the first we can
     int yes {1};
     int listen_sockfd;
     struct addrinfo * current_ai;
@@ -94,6 +95,7 @@ int setup_server ()
     return listen_sockfd;
 }
 
+// Outputs connection info and returns client's socket file descriptor
 int accept_client(const int listen_sockfd)
 {
     struct sockaddr_storage their_addr; // connector's address information
