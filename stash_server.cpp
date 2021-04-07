@@ -1,17 +1,18 @@
 #include <iostream>
 #include <cstdio> //perror
-#include <stdlib.h> //perror
+#include <cstdlib> //perror, exit
 #include <unistd.h> //fork
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <sys/wait.h>
-#include <signal.h>
+#include <cerrno>
+#include <cstring>
+#include <sys/types.h> //waitpid, fork
+#include <sys/socket.h> //sockaddr
+#include <netinet/in.h> //sockaddr_in
+#include <netdb.h> //addrinfo
+#include <arpa/inet.h> // in_addr
+#include <sys/wait.h> //waitpid
+#include <csignal> //sigaction, all signal names
 
+// Handler for child process termination signal
 void sigchld_handler(int s)
 {
     // waitpid() might overwrite errno, so we save and restore it:
@@ -33,6 +34,7 @@ void * get_in_addr(struct sockaddr * sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
+// Returns sockfd that server is listening on
 int setup_server ()
 {
     struct addrinfo hints {0};
@@ -108,8 +110,34 @@ int accept_client(const int listen_sockfd)
 
     char ip_string[INET6_ADDRSTRLEN];
     inet_ntop(their_addr.ss_family, get_in_addr((sockaddr *)(&their_addr)), ip_string, sizeof ip_string);
-    std::cout << "stash_server: got connection from " << ip_string << "/n";
+    std::cout << "stash_server: got connection from " << ip_string << "\n";
     return client_sockfd;
+}
+
+void send_file (const int client_sockfd)
+{
+    int attempt_num = 0;
+    constexpr int max_attempts {10};
+    while (attempt_num < max_attempts)
+    {
+        long int send_result {send(client_sockfd, "Hello, world!", 13, 0)};
+        if (send_result == -1)
+        {
+            std::cerr << "stash_server - send attempt failed (" << attempt_num << " of " << max_attempts <<")\n";
+            std::perror("");
+            ++attempt_num;
+            continue;
+        }
+        break;
+    }
+    if (attempt_num < max_attempts)
+    {
+        std::cout << "stash_server: successful send\n";
+    }
+    else
+    {
+        std::cout << "stash_server: unsuccessful send\n";
+    }
 }
 
 int main()
@@ -118,8 +146,9 @@ int main()
     {
         int listen_sockfd {setup_server()};
 
+        // Handle child process termination signal
         struct sigaction sa;
-        sa.sa_handler = sigchld_handler; // reap all dead processes
+        sa.sa_handler = sigchld_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = SA_RESTART;
         if (sigaction(SIGCHLD, &sa, nullptr) == -1)
@@ -127,26 +156,31 @@ int main()
             std::perror("stash_server - sigaction");
             throw "stash_server: sigaction failed";
         }
-        std::cout << "stash_server: waiting for connections...\n";
 
-        while(true)  // main accept() loop
+        // Accept loop
+        std::cout << "stash_server: waiting for connections...\n";
+        while(true)
         {
             int client_sockfd {accept_client(listen_sockfd)};
             if (client_sockfd == -1)
             {
                 continue;
             }
-            if (!fork())// fork with child handling talking to this client and parent listening
-            { // this is the child process
-                close(listen_sockfd);
-                if (send(client_sockfd, "Hello, world!", 13, 0) == -1)
-                {
-                    std::perror("stash_server - send");
-                }
-                close(listen_sockfd);
-                return 0;
+            pid_t fork_pid {fork()};
+            switch(fork_pid)
+            {
+                case -1: // Fork failed
+                    std::cerr << "stash_server: Failed to fork\n";
+                    break;
+                case 0: // Child
+                    close(listen_sockfd);
+                    send_file(client_sockfd);
+                    close(client_sockfd);
+                    exit(0);
+                default: // Parent
+                    break;
             }
-            close(client_sockfd);  // parent doesn't need this
+            close(client_sockfd);
         }
         close(listen_sockfd);
     }
