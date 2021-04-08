@@ -2,13 +2,13 @@
 #include <cstdio> //perror
 #include <cstdlib> //perror, exit
 #include <unistd.h> //fork
-#include <cerrno>
+#include <cerrno> //errno
 #include <cstring>
 #include <sys/types.h> //waitpid, fork
 #include <sys/socket.h> //sockaddr
 #include <netinet/in.h> //sockaddr_in
 #include <netdb.h> //addrinfo
-#include <arpa/inet.h> // in_addr
+#include <arpa/inet.h> //in_addr
 #include <sys/wait.h> //waitpid
 #include <csignal> //sigaction, all signal names
 
@@ -114,6 +114,7 @@ int accept_client(const int listen_sockfd)
     return client_sockfd;
 }
 
+// Attempts send operation <max_attempts> times to <client_sockfd>
 void send_file (const int client_sockfd)
 {
     int attempt_num = 0;

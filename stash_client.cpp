@@ -1,14 +1,16 @@
-#include <cstdio> // perror
 #include <iostream>
-#include <stdlib.h> // perror
-#include <unistd.h> //gethostname
+#include <cstdio> //perror
+#include <cstdlib> //perror, exit
+#include <unistd.h> //fork
 #include <cerrno> //errno
-#include <string.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/socket.h> //getpeername
-#include <arpa/inet.h> //inet_pton
+#include <cstring>
+#include <sys/types.h> //waitpid, fork
+#include <sys/socket.h> //sockaddr
+#include <netinet/in.h> //sockaddr_in
+#include <netdb.h> //addrinfo
+#include <arpa/inet.h> //in_addr
+#include <sys/wait.h> //waitpid
+#include <csignal> //sigaction, all signal names
 
 // Returns pointer to the <sin_addr> or <sin6_addr> in <sa>
 void * get_in_addr(struct sockaddr * sa)
@@ -76,10 +78,19 @@ int connect_to_server()
     return sockfd;
 }
 
-int main(int argc, char *argv[])
+void verify_input(int argc, char** argv)
+{
+    if ((argc < 2) || (std::string_view(argv[1])!="push" && std::string_view(argv[1])!="pull"))
+    {
+        throw "Invalid input; usage is\n\tstash push\n\tstash pull\n";
+    }
+}
+
+int main(int argc, char** argv)
 {
     try
     {
+        verify_input();
         int server_sockfd {connect_to_server()};
         int maxdatasize {100};
         char buf[maxdatasize];
