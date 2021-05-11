@@ -11,6 +11,34 @@
 #include <arpa/inet.h> //in_addr
 #include <sys/wait.h> //waitpid
 #include <csignal> //sigaction, all signal names
+#include <string>
+#include <filesystem>
+
+class Stash_Client
+{
+    private:
+        char server [256];
+        const char* port{"3490"};
+        const std::filesystem::path stash_path {"Stash"};
+
+    public:
+        Stash_Client()
+        {
+            if (not std::filesystem::exists(stash_path))
+            {
+                std::filesystem::create_directory(stash_path);
+            }
+        }
+}
+
+// Check input to main
+void verify_input(int argc, char** argv)
+{
+    if ((argc != 2) or (std::string(argv[1]) != "push" and std::string(argv[1]) !="pull"))
+    {
+        throw "Invalid input; usage is\n\tstash push\n\tstash pull\n";
+    }
+}
 
 // Returns pointer to the <sin_addr> or <sin6_addr> in <sa>
 void * get_in_addr(struct sockaddr * sa)
@@ -22,7 +50,7 @@ void * get_in_addr(struct sockaddr * sa)
         return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-// Returns socket file descriptor for the Stash server
+// Returns socket file descriptor for the Stash server port 3490
 int connect_to_server()
 {
     struct addrinfo hints {0};
@@ -43,7 +71,7 @@ int connect_to_server()
         throw gai_strerror(gai_return_value);
     }
 
-    // Loop through all the results and connect to the first we can
+    // Loop through all matching addrinfo structs and connect to the first we can
     int sockfd;
     struct addrinfo * current_ai;
     for(current_ai = gai_result; current_ai != nullptr; current_ai = current_ai->ai_next)
@@ -78,19 +106,21 @@ int connect_to_server()
     return sockfd;
 }
 
-void verify_input(int argc, char** argv)
+// Push files to server
+void push_to_server(int server_sockfd)
 {
-    if ((argc < 2) || (std::string_view(argv[1])!="push" && std::string_view(argv[1])!="pull"))
-    {
-        throw "Invalid input; usage is\n\tstash push\n\tstash pull\n";
-    }
+    int maxdatasize {100};
+    char buf[maxdatasize];
+    long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
+
 }
 
-int main(int argc, char** argv)
+int main(int argc, char* argv [])
 {
     try
     {
-        verify_input();
+        client_setup();
+        verify_input(argc, argv);
         int server_sockfd {connect_to_server()};
         int maxdatasize {100};
         char buf[maxdatasize];
