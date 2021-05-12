@@ -1,35 +1,58 @@
 #include <iostream>
-#include <cstdio> //perror
-#include <cstdlib> //perror, exit
-#include <unistd.h> //fork
-#include <cerrno> //errno
-#include <cstring>
-#include <sys/types.h> //waitpid, fork
-#include <sys/socket.h> //sockaddr
-#include <netinet/in.h> //sockaddr_in
-#include <netdb.h> //addrinfo
-#include <arpa/inet.h> //in_addr
-#include <sys/wait.h> //waitpid
-#include <csignal> //sigaction, all signal names
 #include <string>
 #include <filesystem>
+#include <boost/asio.hpp>
+
+// g++ -I ~/HomeExt/boost_1_76_0 stash_client.cpp -std=c++17 -pthread
 
 class Stash_Client
 {
     private:
-        char server [256];
-        const char* port{"3490"};
-        const std::filesystem::path stash_path {"Stash"};
+        std::string m_server {boost::asio::ip::host_name()};
+        const char* m_port {"3490"};
+        const std::filesystem::path m_stash_path {"Stash"};
+
+        boost::asio::ip::tcp::socket connect()
+        {
+            boost::asio::io_context io_context;
+            boost::asio::ip::tcp::resolver resolver(io_context);
+            boost::asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(m_server, m_port);
+            boost::asio::ip::tcp::socket socket(io_context);
+            boost::asio::connect(socket, endpoints);
+            return socket;
+        }
 
     public:
         Stash_Client()
         {
-            if (not std::filesystem::exists(stash_path))
+            if (not std::filesystem::exists(m_stash_path))
             {
-                std::filesystem::create_directory(stash_path);
+                std::filesystem::create_directory(m_stash_path);
             }
+            std::cout << "Constructor finished.\n";
         }
-}
+
+        void pull()
+        {
+            std::cout << "Stash_Client: starting pull from "<< m_server << "...";
+            boost::asio::ip::tcp::socket socket {connect()};
+
+            for (;;)
+            {
+                char buf [128];
+                boost::system::error_code error;
+
+                size_t len = socket.read_some(boost::asio::buffer(buf), error);
+                if (error == boost::asio::error::eof)
+                    break; // Connection closed cleanly by peer.
+                else if (error)
+                    throw boost::system::system_error(error); // Some other error.
+
+            }
+
+            std::cout << "finished.\n";
+        }
+};
 
 // Check input to main
 void verify_input(int argc, char** argv)
@@ -40,101 +63,17 @@ void verify_input(int argc, char** argv)
     }
 }
 
-// Returns pointer to the <sin_addr> or <sin6_addr> in <sa>
-void * get_in_addr(struct sockaddr * sa)
-{
-        if (sa->sa_family == AF_INET)
-        {
-            return &(((struct sockaddr_in *)sa)->sin_addr);
-        }
-        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
-}
-
-// Returns socket file descriptor for the Stash server port 3490
-int connect_to_server()
-{
-    struct addrinfo hints {0};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    // Temporary while current host is server
-    char server[256];
-    gethostname(server, sizeof(server));
-    const char* port{"3490"};
-
-    // Get acceptable addrinfo structs
-    struct addrinfo * gai_result;
-    int gai_return_value;
-    gai_return_value = getaddrinfo(server, port, &hints, &gai_result);
-    if (gai_return_value != 0)
-    {
-        throw gai_strerror(gai_return_value);
-    }
-
-    // Loop through all matching addrinfo structs and connect to the first we can
-    int sockfd;
-    struct addrinfo * current_ai;
-    for(current_ai = gai_result; current_ai != nullptr; current_ai = current_ai->ai_next)
-    {
-        sockfd = socket(current_ai->ai_family, current_ai->ai_socktype, current_ai->ai_protocol);
-        if (sockfd == -1)
-        {
-            std::perror("stash_client - socket operation");
-            continue;
-        }
-        if (connect(sockfd, current_ai->ai_addr, current_ai->ai_addrlen) == -1)
-        {
-            std::perror("stash_client - connect operation");
-            close(sockfd);
-            continue;
-        }
-        break;
-    }
-
-    // No connection found
-    if (current_ai == nullptr)
-    {
-        throw "stash_client failed to connect";
-    }
-
-    // Output
-    char ip_string[INET6_ADDRSTRLEN];
-    inet_ntop(current_ai->ai_family, get_in_addr(static_cast<struct sockaddr *>(current_ai->ai_addr)), ip_string, sizeof ip_string);
-    std::cout << "stash_client: connecting to " << ip_string << "\n";
-
-    freeaddrinfo(gai_result);
-    return sockfd;
-}
-
-// Push files to server
-void push_to_server(int server_sockfd)
-{
-    int maxdatasize {100};
-    char buf[maxdatasize];
-    long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
-
-}
-
 int main(int argc, char* argv [])
 {
     try
     {
-        client_setup();
         verify_input(argc, argv);
-        int server_sockfd {connect_to_server()};
-        int maxdatasize {100};
-        char buf[maxdatasize];
-        long int numbytes {recv(server_sockfd, buf, maxdatasize-1, 0)};
-        if (numbytes == -1)
-        {
-            std::perror("stash_client - recv operation");
-            throw "stash_client recv failed";
-        }
-        buf[numbytes] = '\0';
-        std::cout << "stash_client: received " << numbytes << " bytes\n";
-        std::cout << "stash_client: received '" << buf <<"'\n";
-
-        close(server_sockfd);
+        Stash_Client client;
+        client.pull();
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << e.what() << std::endl;
     }
     catch (...)
     {
@@ -142,4 +81,3 @@ int main(int argc, char* argv [])
     }
     return 0;
 }
-
