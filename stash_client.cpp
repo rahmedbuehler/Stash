@@ -30,12 +30,11 @@ class Stash_Client
             {
                 std::filesystem::create_directory(m_stash_path);
             }
-            std::cout << "Constructor finished.\n";
         }
 
         void pull()
         {
-            std::cout << "Stash_Client: starting pull from "<< m_server << "...";
+            std::cout << "Stash_Client: Starting pull from "<< m_server << "...";
             boost::asio::ip::tcp::socket socket {connect()};
 
             for (;;)
@@ -57,7 +56,35 @@ class Stash_Client
                 }
             }
 
-            std::cout << "finished.\n";
+            std::cout << "Stash_Client: Finished pull.\n";
+        }
+
+
+        void push()
+        {
+            std::cout << "Stash_Client: Starting push to "<< m_server << ".\n";
+            boost::asio::ip::tcp::socket socket {connect()};
+
+            for (;;)
+            {
+                std::vector <char> data(128);
+                boost::system::error_code error;
+
+                size_t len = socket.read_some(boost::asio::buffer(data), error);
+                if (error == boost::asio::error::eof)
+                    break; // Connection closed cleanly by peer.
+                else if (error)
+                    throw boost::system::system_error(error); // Some other error.
+                else
+                {
+                    std::cout << "Received: ";
+                    for (int i {0}; i < data.size(); i++)
+                        std::cout << data[i];
+                    std::cout << "\n";
+                }
+            }
+
+            std::cout << "Stash_Client: Finished push.\n";
         }
 };
 
@@ -66,7 +93,7 @@ void verify_input(int argc, char** argv)
 {
     if ((argc != 2) or (std::string(argv[1]) != "push" and std::string(argv[1]) !="pull"))
     {
-        throw "Invalid input; usage is\n\tstash push\n\tstash pull\n";
+        throw "Usage is 'stash push' or 'stash pull'\n";
     }
 }
 

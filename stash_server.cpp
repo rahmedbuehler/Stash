@@ -12,9 +12,9 @@ class Stash_Server
         boost::asio::ip::tcp::acceptor m_acceptor;
 
     public:
-        Stash_Server(int port = 3490) : m_acceptor (m_io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port)) // Create acceptor for any ipv4
+        Stash_Server(int port = 3490)
+            : m_port{port}, m_acceptor(m_io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port)) // Create acceptor for any ipv4
         {
-            m_port = port;
         }
 
         void send(socket, std::string message)
