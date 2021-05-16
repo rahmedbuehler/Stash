@@ -1,10 +1,11 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <filesystem>
 #include <boost/asio.hpp>
 
-// g++ -I ~/HomeExt/boost_1_76_0 stash_client.cpp -o client.out -std=c++17 -pthread
+// g++ -I ~/HomeExt/boost_1_76_0 stash_client.cpp -o stash.out -std=c++17 -pthread
 
 class Stash_Client
 {
@@ -34,57 +35,46 @@ class Stash_Client
 
         void pull()
         {
-            std::cout << "Stash_Client: Starting pull from "<< m_server << "...";
-            boost::asio::ip::tcp::socket socket {connect()};
+            std::cout << "Stash_Client: Starting pull from "<< m_server << "...\n";
+            boost::asio::ip::tcp::socket client_socket {connect()};
 
-            for (;;)
-            {
-                std::vector <char> data(128);
-                boost::system::error_code error;
+            boost::asio::write(socket, boost::asio::buffer("i"));
 
-                size_t len = socket.read_some(boost::asio::buffer(data), error);
-                if (error == boost::asio::error::eof)
-                    break; // Connection closed cleanly by peer.
-                else if (error)
-                    throw boost::system::system_error(error); // Some other error.
-                else
-                {
-                    std::cout << "Received: ";
-                    for (int i {0}; i < data.size(); i++)
-                        std::cout << data[i];
-                    std::cout << "\n";
-                }
-            }
+            std::vector <char> data(128);
+            boost::asio::read(client_socket, boost::asio::buffer(data));
+
+            std::cout << "Received: ";
+            for (int i {0}; i < data.size(); i++)
+                std::cout << data[i];
+            std::cout << "\n";
 
             std::cout << "Stash_Client: Finished pull.\n";
         }
 
+        // Currently reads entire file into vector; send in pieces?
+        void send_file(boost::asio::ip::tcp::socket& output_socket, const std::filesystem::directory_entry& file)
+        {
+            std::cout << "\t" << file.path().filename() << "\n";
+            std::ifstream output_file (file.path(), std::ifstream::binary);
+            std::vector <std::byte> data(file.file_size());
+            output_file.read(reinterpret_cast<char*>(data.data()), data.capacity());
+            boost::asio::write(client_socket, boost::asio::buffer(data));
+            output_file.close();
+        }
 
         void push()
         {
-            std::cout << "Stash_Client: Starting push to "<< m_server << ".\n";
-            boost::asio::ip::tcp::socket socket {connect()};
+            std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
+            boost::asio::ip::tcp::socket client_socket {connect()};
 
-            for (;;)
+            boost::asio::write(socket, boost::asio::buffer("o"));
+
+            for (auto& entry : std::filesystem::recursive_directory_iterator(m_stash_path))
             {
-                std::vector <char> data(128);
-                boost::system::error_code error;
-
-                size_t len = socket.read_some(boost::asio::buffer(data), error);
-                if (error == boost::asio::error::eof)
-                    break; // Connection closed cleanly by peer.
-                else if (error)
-                    throw boost::system::system_error(error); // Some other error.
-                else
-                {
-                    std::cout << "Received: ";
-                    for (int i {0}; i < data.size(); i++)
-                        std::cout << data[i];
-                    std::cout << "\n";
-                }
+                send_file(client_socket, entry);
             }
 
-            std::cout << "Stash_Client: Finished push.\n";
+            std::cout << "\tFinished push.\n";
         }
 };
 
@@ -103,15 +93,15 @@ int main(int argc, char* argv [])
     {
         verify_input(argc, argv);
         Stash_Client client;
-        client.pull();
+        client.push();
     }
     catch (std::exception& e)
     {
-        std::cerr << e.what() << std::endl;
+        std::cerr << "\tError in " << e.what() << std::endl;
     }
     catch (const char* e)
     {
-        std::cerr << "\n" << e << std::endl;
+        std::cerr << "\tError in " << e << std::endl;
     }
     catch (...)
     {
