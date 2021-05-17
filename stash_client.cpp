@@ -38,7 +38,7 @@ class Stash_Client
             std::cout << "Stash_Client: Starting pull from "<< m_server << "...\n";
             boost::asio::ip::tcp::socket client_socket {connect()};
 
-            boost::asio::write(socket, boost::asio::buffer("i"));
+            boost::asio::write(socket, boost::asio::buffer("pull"));
 
             std::vector <char> data(128);
             boost::asio::read(client_socket, boost::asio::buffer(data));
@@ -67,7 +67,7 @@ class Stash_Client
             std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
             boost::asio::ip::tcp::socket client_socket {connect()};
 
-            boost::asio::write(socket, boost::asio::buffer("o"));
+            boost::asio::write(socket, boost::asio::buffer("push"));
 
             for (auto& entry : std::filesystem::recursive_directory_iterator(m_stash_path))
             {

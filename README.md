@@ -1,3 +1,3 @@
 # Stash
 
-[In Progress] An encrypted C++ file transfer program for Linux.
+[In Progress] An C++ file transfer program using Boost/asio---but mostly an excuse to explore network programming and encryption.
