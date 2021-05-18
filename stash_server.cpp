@@ -9,7 +9,6 @@ class Stash_Server
 {
     private:
         int m_port;
-        boost::asio::io_context m_io_context;
         boost::asio::ip::tcp::acceptor m_acceptor;
         bool m_files_stored;
         std::vector <std::vector <std::byte>> m_storage;
@@ -29,16 +28,12 @@ class Stash_Server
                     current_arg += data[i];
             }
 
+            // Check if pull/push call makes sense
+            if (args.size() < 1 or (args[0] != "push" and args[0] != "pull"))
+            {
+                args[0] = "Invalid Operation";
+            }
             return args;
-        }
-
-
-
-    public:
-        Stash_Server(int port = 3490)
-            : m_port{port}, m_acceptor(m_io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port)) // Create acceptor for any ipv4
-        {
-            m_files_stored = false;
         }
 
         void send(socket, std::string message)
@@ -47,31 +42,65 @@ class Stash_Server
             boost::asio::write(socket, boost::asio::buffer(message), ignored_error);
         }
 
+        void push_files()
+        {
+        }
+
+        void pull_files()
+        {
+        }
+
+    public:
+        Stash_Server(boost::asio::io_context& io_context, int port = 3490)
+            // Create acceptor for any ipv4 endpoint; opens, binds, and listens on endpoint
+            : m_port{port}, m_acceptor(io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port))
+        {
+            m_files_stored = false;
+        }
+
         void run()
         {
-            boost::asio::ip::tcp::socket server_socket(m_io_context);
-
             for(;;)
             {
-                m_acceptor.accept(server_socket); // Accept connection to socket
-
-                std::vector <char> data (128);
-                boost::asio::read(server_socket, data)
-                std::vector <std::string> args {parse_first_request(data)};
-
-                // Check if pull/push call makes sense
-                if (args.size() < 1 or (args[0] != "push" and args[0] != "pull")
+                try
                 {
-                    boost::asio::write(server_socket, boost::asio::buffer("Error"));
-                    continue;
+                    boost::asio::ip::tcp::socket server_socket(io_context);
+                    m_acceptor.accept(server_socket); // Accept connection to socket
+
+                    std::vector <char> data (128);
+                    boost::asio::read(server_socket, data)
+                    std::vector <std::string> args {parse_first_request(data)};
+
+                    switch(args[0])
+                    {
+                        case "push":
+                            if (m_files_stored)
+                            {
+                                boost::asio::write(server_socket, boost::asio::buffer("!"));
+                            }
+                            push_files(server_socket);
+                            break;
+                        case "pull":
+                            if (not m_files_stored)
+                            {
+                                boost::asio::write(server_socket, boost::asio::buffer("!"));
+                                break;
+                            }
+                            pull_files(server_socket);
+                            break;
+                        default:
+                            break;
+                    }
+
+                    // Close <server_socket>
+                    server_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
+                    server_socket.close();
+
                 }
-                else if ((args[0] == "push" and m_files_stored) or (args[0]= "pull" and not m_files_stored))
-                    boost::asio::write(server_socket, boost::asio::buffer("!"));
-                else
-                    boost::asio::write(server_socket, boost::asio::buffer(" "));
-
-                // Main Transfer
-
+                catch (boost::system::system_error &e)
+                {
+                    std::cerr << "\tError in " << e.what() << std::endl;
+                }
             }
         }
 };
@@ -80,7 +109,8 @@ int main()
 {
   try
   {
-    Stash_Server server;
+    boost::asio::io_context io_context;
+    Stash_Server server (io_context);
     server.run();
   }
   catch (std::exception& e)
