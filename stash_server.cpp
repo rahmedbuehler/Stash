@@ -48,19 +48,18 @@ class Stash_Session
             boost::asio::write(socket, boost::asio::buffer(message), ignored_error);
         }
 
-        void push_files()
+        void push_files_to_server()
         {
             m_storage.clear();
         }
 
-        void pull_files()
+        void pull_files_from_server()
         {
         }
 
     public:
-        Stash_Session(boost::asio::ip::tcp::socket& session_sock, std::vector <std::vector <std::byte>>& storage)
+        Stash_Session(boost::asio::ip::tcp::socket & session_sock, std::vector <std::vector <std::byte>> & storage)
         {
-            // This vs passing pointer?
             m_session_sock = session_sock;
             m_storage = storage;
         }
@@ -77,8 +76,11 @@ class Stash_Session
                     if (files_stored())
                     {
                         boost::asio::write(m_session_sock, boost::asio::buffer("!"));
+                        boost::asio::read(m_session_sock, data);
+                        if (data[0] != ">")
+                            break;
                     }
-                    push_files(m_session_sock);
+                    push_files_to_server(m_session_sock);
                     break;
                 case "pull":
                     if (not files_stored())
@@ -86,14 +88,14 @@ class Stash_Session
                         boost::asio::write(m_session_sock, boost::asio::buffer("!"));
                         break;
                     }
-                    pull_files(m_session_sock);
+                    pull_files_from_server(m_session_sock);
                     break;
                 default:
                     break;
             }
 
         }
-
+};
 
 
 class Stash_Server
@@ -116,13 +118,9 @@ class Stash_Server
         {
             for(;;)
             {
-                try
-                {
-
                     // Create and accept connection to socket
                     boost::asio::ip::tcp::socket session_socket(io_context);
                     m_acceptor.accept(session_socket);
-
 
                     // Handle current session
                     Stash_Session session (session_socket, m_storage);
@@ -131,11 +129,6 @@ class Stash_Server
                     // Close socket
                     session_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
                     session_socket.close();
-                }
-                catch (boost::system::system_error &e)
-                {
-                    std::cerr << "\tError in " << e.what() << std::endl;
-                }
             }
         }
 };
@@ -155,4 +148,3 @@ int main()
 
   return 0;
 }
-
