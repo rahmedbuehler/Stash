@@ -62,14 +62,25 @@ class Stash_Client
             output_file.close();
         }
 
+        std::size_t get_size (std::filesystem::recursive_directory_iterator iterator)
+        {
+            std::size_t i {0};
+            for (auto entry : iterator)
+            {
+                i += 1;
+            }
+            return i;
+        }
+
         void push()
         {
             std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
             boost::asio::ip::tcp::socket client_socket {connect()};
 
-            boost::asio::write(socket, boost::asio::buffer("push"));
+            std::filesystem::recursive_directory_iterator stash_iterator(m_stash_path);
+            boost::asio::write(client_socket, boost::asio::buffer("push " + std::to_string(get_size(stash_iterator))));
 
-            for (auto& entry : std::filesystem::recursive_directory_iterator(m_stash_path))
+            for (auto& entry : stash_iterator)
             {
                 send_file(client_socket, entry);
             }
