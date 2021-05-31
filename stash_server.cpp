@@ -11,12 +11,12 @@
 class Stash_Session
 {
     private:
-        boost::asio::ip::tcp::socket m_session_sock;
-        std::vector <std::vector <std::byte>> m_storage;
+        boost::asio::ip::tcp::socket * m_session_sock_ptr;
+        std::vector <std::vector <std::byte>> * m_storage_ptr;
 
         bool files_stored()
         {
-            if (m_storage.size() == 0)
+            if (m_storage_ptr->size() == 0)
                 return false;
             else
                 return true;
@@ -41,7 +41,7 @@ class Stash_Session
             if (args.size() < 1)
                 args[0] = "Invalid Operation";
             else if (args[0] == "push" and args.size() > 1)
-                args[1] = std::stoi(args[1]);
+                ;
             else if (args[0] == "pull")
                 ;
             else
@@ -52,12 +52,12 @@ class Stash_Session
 
         std::size_t send(const std::string & message)
         {
-            return boost::asio::write(m_session_sock, boost::asio::buffer(message));
+            return boost::asio::write(*m_session_sock_ptr, boost::asio::buffer(message));
         }
 
         std::size_t send(const std::vector <std::byte> & file)
         {
-            return boost::asio::write(m_session_sock, boost::asio::buffer(file));
+            return boost::asio::write(*m_session_sock_ptr, boost::asio::buffer(file));
         }
 
         void receive_files(const std::size_t num_files)
@@ -65,38 +65,37 @@ class Stash_Session
             for (std::size_t i{0}; i < num_files; i++)
             {
                 std::vector <std::byte> current_file;
-                boost::asio::read(m_session_sock, current_file);
-                m_storage.push_back(current_file);
+                boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(current_file));
+                m_storage_ptr->push_back(current_file);
             }
         }
 
         void send_files()
         {
-            send(std::to_string(m_storage.size()));
+            send(std::to_string(m_storage_ptr->size()));
 
-            for (auto current_file : m_storage)
+            for (auto current_file : *m_storage_ptr)
             {
                 send(current_file);
             }
 
-            m_storage.clear();
+            m_storage_ptr->clear();
         }
 
     public:
-        Stash_Session(boost::asio::ip::tcp::socket & session_sock, std::vector <std::vector <std::byte>> & storage)
+        Stash_Session(boost::asio::ip::tcp::socket * session_sock_ptr, std::vector <std::vector <std::byte>> * storage_ptr)
+            : m_session_sock_ptr {session_sock_ptr}, m_storage_ptr {storage_ptr}
         {
-            m_session_sock = session_sock;
-            m_storage = storage;
         }
 
         void start()
         {
             std::vector <char> data (128);
-            boost::asio::read(m_session_sock, data);
+            boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(data));
             std::vector <std::string> args = parse_first_request(data);
 
             if (args[0] == "push")
-                receive_files(args[1]);
+                receive_files(static_cast<std::size_t>(std::stoi(args[1])));
             else if (args[0] == "pull")
                 send_files();
         }
@@ -112,30 +111,28 @@ class Stash_Server
         boost::asio::io_context m_io_context;
         boost::asio::ip::tcp::acceptor m_acceptor;
 
-
     public:
-        Stash_Server(boost::asio::io_context& io_context, int port = 3490)
+        Stash_Server(int port = 3490)
             // Create acceptor for any ipv4 endpoint; opens, binds, and listens on endpoint
-            : m_port{port}, m_acceptor(io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port))
+            : m_port{port}, m_acceptor(m_io_context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port))
         {
-            m_io_context = io_context;
         }
 
         void run()
         {
             for(;;)
             {
-                    // Create and accept connection to socket
-                    boost::asio::ip::tcp::socket session_socket(m_io_context);
-                    m_acceptor.accept(session_socket);
+                // Create and accept connection to socket
+                boost::asio::ip::tcp::socket session_socket(m_io_context);
+                m_acceptor.accept(session_socket);
 
-                    // Handle current session
-                    Stash_Session session (session_socket, m_storage);
-                    session.start();
+                // Handle current session
+                Stash_Session session (&session_socket, &m_storage);
+                session.start();
 
-                    // Close socket
-                    session_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-                    session_socket.close();
+                // Close socket
+                session_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
+                session_socket.close();
             }
         }
 };
@@ -144,8 +141,7 @@ int main()
 {
   try
   {
-    boost::asio::io_context io_context;
-    Stash_Server server (io_context);
+    Stash_Server server;
     server.run();
   }
   catch (std::exception& e)
