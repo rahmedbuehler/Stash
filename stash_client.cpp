@@ -10,22 +10,21 @@
 class Stash_Client
 {
     private:
+        boost::asio::io_context m_io_context;
+        boost::asio::ip::tcp::socket m_socket; // Create socket and associate with <m_io_context>
         std::string m_server {boost::asio::ip::host_name()};
         std::string m_port {"3490"};
         const std::filesystem::path m_stash_path {"Stash"};
 
-        boost::asio::ip::tcp::socket connect()
+        void connect()
         {
-            boost::asio::io_context io_context;
-            boost::asio::ip::tcp::resolver resolver(io_context); //Associate <resolver> with <io_context>
-            boost::asio::ip::tcp::resolver::results_type endpoints {resolver.resolve(m_server, m_port)}; //Get endpoints
-            boost::asio::ip::tcp::socket socket(io_context); //Create socket and associate with <io_context>
-            boost::asio::connect(socket, endpoints); // Connect <socket> and an acceptable <endpoint>; automatically loops through <endpoints>
-            return socket;
+            boost::asio::ip::tcp::resolver resolver(m_io_context); // Associate <resolver> with <io_context>
+            boost::asio::ip::tcp::resolver::results_type endpoints {resolver.resolve(m_server, m_port)}; // Get endpoints
+            boost::asio::connect(m_socket, endpoints); // Connect <socket> and an acceptable <endpoint>; automatically loops through <endpoints>
         }
 
     public:
-        Stash_Client()
+        Stash_Client() : m_socket(m_io_context)
         {
             if (not std::filesystem::exists(m_stash_path))
             {
@@ -36,12 +35,12 @@ class Stash_Client
         void pull()
         {
             std::cout << "Stash_Client: Starting pull from "<< m_server << "...\n";
-            boost::asio::ip::tcp::socket client_socket {connect()};
+            connect();
 
-            boost::asio::write(socket, boost::asio::buffer("pull"));
+            boost::asio::write(m_socket, boost::asio::buffer("pull"));
 
             std::vector <char> data(128);
-            boost::asio::read(client_socket, boost::asio::buffer(data));
+            boost::asio::read(m_socket, boost::asio::buffer(data));
 
             std::cout << "Received: ";
             for (int i {0}; i < data.size(); i++)
@@ -52,13 +51,13 @@ class Stash_Client
         }
 
         // Currently reads entire file into vector; send in pieces?
-        void send_file(boost::asio::ip::tcp::socket& output_socket, const std::filesystem::directory_entry& file)
+        void send_file(const std::filesystem::directory_entry & file)
         {
             std::cout << "\t" << file.path().filename() << "\n";
             std::ifstream output_file (file.path(), std::ifstream::binary);
             std::vector <std::byte> data(file.file_size());
             output_file.read(reinterpret_cast<char*>(data.data()), data.capacity());
-            boost::asio::write(client_socket, boost::asio::buffer(data));
+            boost::asio::write(m_socket, boost::asio::buffer(data));
             output_file.close();
         }
 
@@ -75,14 +74,14 @@ class Stash_Client
         void push()
         {
             std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
-            boost::asio::ip::tcp::socket client_socket {connect()};
+            connect();
 
             std::filesystem::recursive_directory_iterator stash_iterator(m_stash_path);
-            boost::asio::write(client_socket, boost::asio::buffer("push " + std::to_string(get_size(stash_iterator))));
+            boost::asio::write(m_socket, boost::asio::buffer("push " + std::to_string(get_size(stash_iterator))));
 
             for (auto& entry : stash_iterator)
             {
-                send_file(client_socket, entry);
+                send_file(entry);
             }
 
             std::cout << "\tFinished push.\n";
