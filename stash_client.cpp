@@ -11,7 +11,7 @@ class Stash_Client
 {
     private:
         boost::asio::io_context m_io_context;
-        boost::asio::ip::tcp::socket m_socket; // Create socket and associate with <m_io_context>
+        boost::asio::ip::tcp::socket m_socket;
         std::string m_server {boost::asio::ip::host_name()};
         std::string m_port {"3490"};
         const std::filesystem::path m_stash_path {"Stash"};
@@ -23,8 +23,18 @@ class Stash_Client
             boost::asio::connect(m_socket, endpoints); // Connect <socket> and an acceptable <endpoint>; automatically loops through <endpoints>
         }
 
+        std::size_t get_stash_size ()
+        {
+            std::size_t i {0};
+            for (auto& entry : std::filesystem::recursive_directory_iterator(m_stash_path))
+            {
+                i++;
+            }
+            return i;
+        }
+
     public:
-        Stash_Client() : m_socket(m_io_context)
+        Stash_Client() : m_socket(m_io_context) // Create socket and associate with <m_io_context>
         {
             if (not std::filesystem::exists(m_stash_path))
             {
@@ -61,25 +71,14 @@ class Stash_Client
             output_file.close();
         }
 
-        std::size_t get_size (std::filesystem::recursive_directory_iterator iterator)
-        {
-            std::size_t i {0};
-            for (auto entry : iterator)
-            {
-                i += 1;
-            }
-            return i;
-        }
-
         void push()
         {
             std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
             connect();
 
-            std::filesystem::recursive_directory_iterator stash_iterator(m_stash_path);
-            boost::asio::write(m_socket, boost::asio::buffer("push " + std::to_string(get_size(stash_iterator))));
+            boost::asio::write(m_socket, boost::asio::buffer("push "+std::to_string(get_stash_size())));
 
-            for (auto& entry : stash_iterator)
+            for (auto& entry: std::filesystem::recursive_directory_iterator(m_stash_path))
             {
                 send_file(entry);
             }

@@ -22,7 +22,7 @@ class Stash_Session
                 return true;
         }
 
-        std::vector <std::string> parse_first_request (std::vector<char> data)
+        std::vector <std::string> parse_first_request (const std::vector<char> & data)
         {
             std::string current_arg {""};
             std::vector <std::string> args;
@@ -34,8 +34,12 @@ class Stash_Session
                     current_arg = "";
                 }
                 else
+                {
                     current_arg += data[i];
+                }
             }
+
+            std::cout << "Identified " << args.size() << " argument(s) in parse_first_request\n";
 
             // Check if call makes sense
             if (args.size() < 1)
@@ -62,8 +66,10 @@ class Stash_Session
 
         void receive_files(const std::size_t num_files)
         {
+            std::cout << "In receive files\n";
             for (std::size_t i{0}; i < num_files; i++)
             {
+                std::cout << "\tReceiving file " << i << "\n";
                 std::vector <std::byte> current_file;
                 boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(current_file));
                 m_storage_ptr->push_back(current_file);
@@ -90,12 +96,16 @@ class Stash_Session
 
         void start()
         {
-            std::vector <char> data (128);
+            std::vector <char> data (5);
+            std::cout << "Before inital read\n";
             boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(data));
+            std::cout << "After inital read\n";
             std::vector <std::string> args = parse_first_request(data);
 
             if (args[0] == "push")
+            {
                 receive_files(static_cast<std::size_t>(std::stoi(args[1])));
+            }
             else if (args[0] == "pull")
                 send_files();
         }
@@ -146,7 +156,7 @@ int main()
   }
   catch (std::exception& e)
   {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "Exception: " << e.what() << std::endl;
   }
 
   return 0;
