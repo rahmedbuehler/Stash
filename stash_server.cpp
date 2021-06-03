@@ -40,6 +40,8 @@ class Stash_Session
             }
 
             std::cout << "Identified " << args.size() << " argument(s) in parse_first_request\n";
+            for (std::string arg : args)
+                std::cout << "\t" << arg <<"\n";
 
             // Check if call makes sense
             if (args.size() < 1)
@@ -96,11 +98,16 @@ class Stash_Session
 
         void start()
         {
-            std::vector <char> data (5);
-            std::cout << "Before inital read\n";
-            boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(data));
-            std::cout << "After inital read\n";
-            std::vector <std::string> args = parse_first_request(data);
+            std::string data;
+            std::cout << "!Before initial read\n";
+            boost::asio::read_until(*m_session_sock_ptr, boost::asio::dynamic_buffer(data), ' ');
+            std::cout << "!After initial read\n" << data;
+
+            std::cout << "!Before initial read 2\n";
+
+            std::vector <std::string> args;
+            args.push_back(data);
+            args.push_back("1");
 
             if (args[0] == "push")
             {

@@ -76,7 +76,7 @@ class Stash_Client
             std::cout << "Stash_Client\n\tStarting push to "<< m_server << "\n";
             connect();
 
-            boost::asio::write(m_socket, boost::asio::buffer("push "+std::to_string(get_stash_size())));
+            boost::asio::write(m_socket, boost::asio::buffer("push "+std::to_string(get_stash_size())+" "));
 
             for (auto& entry: std::filesystem::recursive_directory_iterator(m_stash_path))
             {
