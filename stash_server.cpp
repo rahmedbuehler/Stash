@@ -22,24 +22,24 @@ class Stash_Session
                 return true;
         }
 
-        std::vector <std::string> parse_first_request (const std::vector<char> & data)
+        std::vector <std::string> parse_header (char header [], std::size_t header_size=128)
         {
             std::string current_arg {""};
             std::vector <std::string> args;
-            for (int i{0}; i < data.size(); i++)
+            for (int i{0}; i < header_size; i++)
             {
-                if (data[i] == ' ' or i == data.size()-1)
+                if (header[i] == ' ' or i == header_size-1)
                 {
                     args.push_back(current_arg);
                     current_arg = "";
                 }
                 else
                 {
-                    current_arg += data[i];
+                    current_arg += header[i];
                 }
             }
 
-            std::cout << "Identified " << args.size() << " argument(s) in parse_first_request\n";
+            std::cout << "Identified " << args.size() << " argument(s) in header\n";
             for (std::string arg : args)
                 std::cout << "\t" << arg <<"\n";
 
@@ -98,16 +98,16 @@ class Stash_Session
 
         void start()
         {
-            std::string data;
-            std::cout << "!Before initial read\n";
-            boost::asio::read_until(*m_session_sock_ptr, boost::asio::dynamic_buffer(data), ' ');
-            std::cout << "!After initial read\n" << data;
+            std::size_t header_size {128};
+            char header [header_size];
+            std::cout << "Before initial read\n";
+            auto bytes_transferred = boost::asio::read(*m_session_sock_ptr, boost::asio::buffer(header, 128));
+            std::cout << "After initial read of " << bytes_transferred << " from header: ";
+            for (char c : header)
+                std::cout << c;
+            std::cout << "\n";
 
-            std::cout << "!Before initial read 2\n";
-
-            std::vector <std::string> args;
-            args.push_back(data);
-            args.push_back("1");
+            std::vector <std::string> args{parse_header(header, header_size)};
 
             if (args[0] == "push")
             {
