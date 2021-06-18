@@ -13,19 +13,10 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 {
     private:
         boost::asio::ip::tcp::socket m_session_sock;
-        std::vector <std::vector <std::byte>> * m_storage_ptr;
-        char m_header [128];
         boost::asio::streambuf streambuf;
 
-        bool files_stored()
-        {
-            if (m_storage_ptr->size() == 0)
-                return false;
-            else
-                return true;
-        }
-
-        std::vector <std::string> parse_header (char header [], std::size_t header_size=128)
+        /*
+        std::vector <std::string> parse_header (boost::asio::streambuf streambuf, std::size_t header_size=128)
         {
             std::string current_arg {""};
             std::vector <std::string> args;
@@ -58,6 +49,7 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
             return args;
         }
+        */
 
         std::size_t send(const std::string & message)
         {
@@ -69,6 +61,7 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
             return boost::asio::write(m_session_sock, boost::asio::buffer(file));
         }
 
+        /*
         void receive_files(const std::size_t num_files)
         {
             std::cout << "In receive files\n";
@@ -92,36 +85,37 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
             m_storage_ptr->clear();
         }
+        */
 
     public:
-        Stash_Session(boost::asio::ip::tcp::socket&& session_sock, std::vector <std::vector <std::byte>> * storage_ptr)
-            : m_session_sock(std::move(session_sock)), m_storage_ptr {storage_ptr}
+        Stash_Session(boost::asio::ip::tcp::socket&& session_sock)
+            : m_session_sock(std::move(session_sock))
         {
         }
 
         void start()
         {
-            std::cout << "Before initial read\n";
-            boost::asio::async_read(m_session_sock, boost::asio::buffer(m_header, 128),
+            boost::asio::async_read(m_session_sock, streambuf,
                 [self = shared_from_this()] (boost::system::error_code error, std::size_t bytes_transferred)
             {
                 std::cout << "In async handler; bytes transferred: " << bytes_transferred << "\n";
-                for (int i{0}; i < 128; i++)
-                    std::cout << &self->m_header[i] << "|";
+                std::cout << std::istream(&self->streambuf).rdbuf();
                 std::cout << "\n";
-                //std::cout << std::istream(&self->m_header).rdbuf();
+                std::cout << "Leaving async handler\n";
+
             });
 
-            std::cout << "After async read from header:\n";
+            /*
             std::size_t header_size {128};
             std::vector <std::string> args{parse_header(m_header, header_size)};
 
             if (args[0] == "push")
             {
-                receive_files(static_cast<std::size_t>(std::stoi(args[1])));
+                ;//receive_files(static_cast<std::size_t>(std::stoi(args[1])));
             }
             else if (args[0] == "pull")
-                send_files();
+                ;//send_files();
+            */
         }
 };
 
@@ -130,8 +124,6 @@ class Stash_Server
 {
     private:
         int m_port;
-        // This eventually needs to be generalized for more than one user
-        std::vector <std::vector <std::byte>> m_storage;
         boost::asio::io_context* m_io_context_ptr;
         boost::asio::ip::tcp::acceptor m_acceptor;
         std::optional<boost::asio::ip::tcp::socket> socket;
@@ -166,7 +158,7 @@ class Stash_Server
             socket.emplace(*m_io_context_ptr);
             m_acceptor.async_accept(*socket, [&] (boost::system::error_code error)
             {
-                std::make_shared<Stash_Session>(std::move(*socket),&m_storage)->start();
+                std::make_shared<Stash_Session>(std::move(*socket))->start();
                 async_accept();
             });
         }
