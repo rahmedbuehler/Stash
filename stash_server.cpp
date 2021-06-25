@@ -87,6 +87,20 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
         }
         */
 
+        void read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
+        {
+            if (error == boost::asio::error::eof)
+                std::cout << "Connection closed by client (" << bytes_transferred << " bytes transferred)\n";
+            else if (error)
+                std::cerr << "Read failed with " << error.message() << "\n";
+            else
+            {
+                std::cout << "Read successful (" << bytes_transferred << " bytes transferred)\n";
+                //std::cout << std::istream(&self->streambuf).rdbuf();
+            }
+            std::cout << "Leaving read_completion_handler\n";
+        }
+
     public:
         Stash_Session(boost::asio::ip::tcp::socket&& session_sock)
             : m_session_sock(std::move(session_sock))
@@ -95,16 +109,7 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
         void start()
         {
-            boost::asio::async_read(m_session_sock, streambuf,
-                [self = shared_from_this()] (boost::system::error_code error, std::size_t bytes_transferred)
-            {
-                std::cout << "In async handler; bytes transferred: " << bytes_transferred << "\n";
-                std::cout << std::istream(&self->streambuf).rdbuf();
-                std::cout << "\n";
-                std::cout << "Leaving async handler\n";
-
-            });
-
+            boost::asio::async_read(m_session_sock, streambuf, std::bind(&Stash_Session::read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
             /*
             std::size_t header_size {128};
             std::vector <std::string> args{parse_header(m_header, header_size)};
@@ -126,7 +131,7 @@ class Stash_Server
         int m_port;
         boost::asio::io_context* m_io_context_ptr;
         boost::asio::ip::tcp::acceptor m_acceptor;
-        std::optional<boost::asio::ip::tcp::socket> socket;
+        std::optional<boost::asio::ip::tcp::socket> m_socket;
 
     public:
         Stash_Server(boost::asio::io_context* io_context_ptr, std::uint16_t port = 3490)
@@ -155,10 +160,10 @@ class Stash_Server
 
         void async_accept()
         {
-            socket.emplace(*m_io_context_ptr);
-            m_acceptor.async_accept(*socket, [&] (boost::system::error_code error)
+            m_socket.emplace(*m_io_context_ptr);
+            m_acceptor.async_accept(*m_socket, [&] (boost::system::error_code error)
             {
-                std::make_shared<Stash_Session>(std::move(*socket))->start();
+                std::make_shared<Stash_Session>(std::move(*m_socket))->start();
                 async_accept();
             });
         }
