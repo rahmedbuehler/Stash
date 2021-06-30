@@ -13,16 +13,18 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 {
     private:
         boost::asio::ip::tcp::socket m_session_sock;
-        boost::asio::streambuf streambuf;
+        boost::asio::streambuf m_streambuf;
 
-        /*
-        std::vector <std::string> parse_header (boost::asio::streambuf streambuf, std::size_t header_size=128)
+        std::vector <std::string> parse_header ()
         {
+            std::vector<char> header(m_streambuf.size());
+            buffer_copy(boost::asio::buffer(header), m_streambuf.data());
+
             std::string current_arg {""};
             std::vector <std::string> args;
-            for (int i{0}; i < header_size; i++)
+            for (int i{0}; i < header.size(); i++)
             {
-                if (header[i] == ' ' or i == header_size-1)
+                if (header[i] == ' ' or i == header.size()-1)
                 {
                     args.push_back(current_arg);
                     current_arg = "";
@@ -49,7 +51,6 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
             return args;
         }
-        */
 
         std::size_t send(const std::string & message)
         {
@@ -73,6 +74,7 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
                 m_storage_ptr->push_back(current_file);
             }
         }
+        */
 
         void send_files()
         {
@@ -85,19 +87,26 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
             m_storage_ptr->clear();
         }
-        */
 
         void read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
         {
-            if (error == boost::asio::error::eof)
-                std::cout << "Connection closed by client (" << bytes_transferred << " bytes transferred)\n";
-            else if (error)
-                std::cerr << "Read failed with " << error.message() << "\n";
-            else
+            if ( (!error or error == boost::asio::error::eof) and bytes_transferred > 0)
             {
                 std::cout << "Read successful (" << bytes_transferred << " bytes transferred)\n";
-                //std::cout << std::istream(&self->streambuf).rdbuf();
+                std::vector <std::string> args {parse_header()};
+                if (args[0] == "push")
+                {
+                    std::cout << "Pushing\n";
+                    //receive_files(static_cast<std::size_t>(std::stoi(args[1])));
+                }
+                else if (args[0] == "pull")
+                {
+                    std::cout << "Pulling\n";
+                    send_files();
+                }
             }
+            else
+                std::cerr << "Read failed with " << error.message() << "\n";
             std::cout << "Leaving read_completion_handler\n";
         }
 
@@ -109,19 +118,9 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
         void start()
         {
-            boost::asio::async_read(m_session_sock, streambuf, std::bind(&Stash_Session::read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-            /*
-            std::size_t header_size {128};
-            std::vector <std::string> args{parse_header(m_header, header_size)};
-
-            if (args[0] == "push")
-            {
-                ;//receive_files(static_cast<std::size_t>(std::stoi(args[1])));
-            }
-            else if (args[0] == "pull")
-                ;//send_files();
-            */
+            boost::asio::async_read(m_session_sock, m_streambuf, std::bind(&Stash_Session::read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
+
 };
 
 
