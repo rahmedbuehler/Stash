@@ -1,13 +1,20 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <boost/asio.hpp>
 #include <vector>
 #include <optional>
+#include <filesystem>
 
 // g++ -I ~/HomeExt/boost_1_76_0 stash_server.cpp -o server.out -std=c++17 -pthread
 
-
-// Add smart pointers
+/*
+    To Do:
+        - receive_files currently outputs dummy content
+        - switch send and receive to async
+        - switch send and receive to use streambuf?
+        - Add smart pointers?
+*/
 
 class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 {
@@ -52,43 +59,40 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
             return args;
         }
 
-        std::size_t send(const std::string & message)
-        {
-            return boost::asio::write(m_session_sock, boost::asio::buffer(message));
-        }
-
-        std::size_t send(const std::vector <std::byte> & file)
-        {
-            return boost::asio::write(m_session_sock, boost::asio::buffer(file));
-        }
-
-        /*
-        void receive_files(const std::size_t num_files)
+        void receive_files(const std::filesystem::path folder, const std::size_t num_files)
         {
             std::cout << "In receive files\n";
+            if (not std::filesystem::exists(folder))
+                std::filesystem::create_directory(folder);
             for (std::size_t i{0}; i < num_files; i++)
             {
                 std::cout << "\tReceiving file " << i << "\n";
                 std::vector <std::byte> current_file;
                 boost::asio::read(m_session_sock, boost::asio::buffer(current_file));
-                m_storage_ptr->push_back(current_file);
+                std::ofstream fout;
+                fout.open(folder/std::to_string(i));
+                fout << "Writing something";
+                fout.close();
             }
         }
-        */
 
-        void send_files()
+        std::size_t send(const std::filesystem::directory_entry& file)
         {
-            send(std::to_string(m_storage_ptr->size()));
-
-            for (auto current_file : *m_storage_ptr)
-            {
-                send(current_file);
-            }
-
-            m_storage_ptr->clear();
+            //return boost::asio::write(m_session_sock, boost::asio::buffer(file));
+            std::cout << "In send\n";
+            return 2;
         }
 
-        void read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
+        void send_files(const std::filesystem::path folder)
+        {
+            for (auto& file : std::filesystem::recursive_directory_iterator(folder))
+            {
+                send(file);
+                std::filesystem::remove(file);
+            }
+        }
+
+        void header_read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
         {
             if ( (!error or error == boost::asio::error::eof) and bytes_transferred > 0)
             {
@@ -97,12 +101,12 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
                 if (args[0] == "push")
                 {
                     std::cout << "Pushing\n";
-                    //receive_files(static_cast<std::size_t>(std::stoi(args[1])));
+                    receive_files("test", static_cast<std::size_t>(std::stoi(args[1])));
                 }
                 else if (args[0] == "pull")
                 {
                     std::cout << "Pulling\n";
-                    send_files();
+                    //send_files();
                 }
             }
             else
@@ -118,7 +122,7 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
 
         void start()
         {
-            boost::asio::async_read(m_session_sock, m_streambuf, std::bind(&Stash_Session::read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+            boost::asio::async_read(m_session_sock, m_streambuf, std::bind(&Stash_Session::header_read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
 };
@@ -138,24 +142,6 @@ class Stash_Server
             : m_port{port}, m_io_context_ptr{io_context_ptr}, m_acceptor(*m_io_context_ptr, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), m_port))
         {
         }
-
-        //void run()
-        //{
-            //for(;;)
-            //{
-                // Create and accept connection to socket
-                //boost::asio::ip::tcp::socket session_socket(m_io_context);
-                //m_acceptor.accept(session_socket);
-
-                // Handle current session
-                //Stash_Session session (*session_socket, &m_storage);
-                //session.start();
-
-                // Close socket
-                //session_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-                //session_socket.close();
-            //}
-        //}
 
         void async_accept()
         {
@@ -181,6 +167,7 @@ int main()
   catch (std::exception& e)
   {
     std::cerr << "Exception: " << e.what() << std::endl;
+    return 1;
   }
 
   return 0;
