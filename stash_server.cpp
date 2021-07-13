@@ -10,9 +10,8 @@
 
 /*
     To Do:
-        - receive_files currently outputs dummy content
-        - switch send and receive to async
-        - switch send and receive to use streambuf?
+        - Test receive_files
+        - Add send_files
         - Add smart pointers?
 */
 
@@ -22,11 +21,8 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
         boost::asio::ip::tcp::socket m_session_sock;
         boost::asio::streambuf m_streambuf;
 
-        std::vector <std::string> parse_header ()
+        std::vector <std::string> parse_header (const std::string header)
         {
-            std::vector<char> header(m_streambuf.size());
-            buffer_copy(boost::asio::buffer(header), m_streambuf.data());
-
             std::string current_arg {""};
             std::vector <std::string> args;
             for (int i{0}; i < header.size(); i++)
@@ -59,37 +55,39 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
             return args;
         }
 
+        std::string make_string(boost::asio::streambuf& streambuf)
+        {
+            return {boost::asio::buffers_begin(streambuf.data()), boost::asio::buffers_end(streambuf.data())};
+        }
+
+        void receive_read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
+        {
+            if ( (!error or error == boost::asio::error::eof) and bytes_transferred > 0)
+            {
+                std::cout << "Read successful (" << bytes_transferred << " bytes transferred)\n";
+
+                std::ofstream fout;
+                fout.open("temp_name_in_receive_files");
+                // The cast below currently works but is not guaranteed by documentation
+                fout << boost::asio::buffer_cast<const char*>( m_streambuf.data() );
+                fout.close();
+                m_streambuf.consume(bytes_transferred);
+            }
+            else
+                std::cerr << "Read failed with " << error.message() << "\n";
+            std::cout << "Leaving read_completion_handler for receive\n";
+        }
+
         void receive_files(const std::filesystem::path folder, const std::size_t num_files)
         {
             std::cout << "In receive files\n";
             if (not std::filesystem::exists(folder))
                 std::filesystem::create_directory(folder);
-            for (std::size_t i{0}; i < num_files; i++)
-            {
-                std::cout << "\tReceiving file " << i << "\n";
-                std::vector <std::byte> current_file;
-                boost::asio::read(m_session_sock, boost::asio::buffer(current_file));
-                std::ofstream fout;
-                fout.open(folder/std::to_string(i));
-                fout << "Writing something";
-                fout.close();
-            }
-        }
-
-        std::size_t send(const std::filesystem::directory_entry& file)
-        {
-            //return boost::asio::write(m_session_sock, boost::asio::buffer(file));
-            std::cout << "In send\n";
-            return 2;
+            boost::asio::async_read(m_session_sock, m_streambuf, std::bind(&Stash_Session::receive_read_completion_handler, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
         void send_files(const std::filesystem::path folder)
         {
-            for (auto& file : std::filesystem::recursive_directory_iterator(folder))
-            {
-                send(file);
-                std::filesystem::remove(file);
-            }
         }
 
         void header_read_completion_handler (boost::system::error_code error, std::size_t bytes_transferred)
@@ -97,7 +95,10 @@ class Stash_Session : public std::enable_shared_from_this<Stash_Session>
             if ( (!error or error == boost::asio::error::eof) and bytes_transferred > 0)
             {
                 std::cout << "Read successful (" << bytes_transferred << " bytes transferred)\n";
-                std::vector <std::string> args {parse_header()};
+
+                std::vector <std::string> args {parse_header(make_string(m_streambuf))};
+                m_streambuf.consume(bytes_transferred);
+
                 if (args[0] == "push")
                 {
                     std::cout << "Pushing\n";
