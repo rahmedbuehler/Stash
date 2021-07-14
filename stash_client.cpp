@@ -10,18 +10,31 @@
 class Stash_Client
 {
     private:
-        boost::asio::io_context m_io_context;
+        std::string m_command;
+        boost::asio::ip::tcp::resolver m_resolver;
         boost::asio::ip::tcp::socket m_socket;
-        std::string m_server {boost::asio::ip::host_name()};
-        std::string m_port {"3490"};
-        const std::filesystem::path m_stash_path {"Stash"};
-        std::size_t m_buff_size {1024};
+        const std::filesystem::path m_stash_path;
 
-        void connect()
+        void on_resolve(boost::system::error_code error, boost::asio::ip::tcp::resolver::results_type endpoints)
         {
-            boost::asio::ip::tcp::resolver resolver(m_io_context); // Associate <resolver> with <io_context>
-            boost::asio::ip::tcp::resolver::results_type endpoints {resolver.resolve(m_server, m_port)}; // Get endpoints
-            boost::asio::connect(m_socket, endpoints); // Connect <socket> and an acceptable <endpoint>; automatically loops through <endpoints>
+            std::cout << "Resolve: " << error.message() <<  "\n";
+            boost::asio::async_connect(m_socket, endpoints, std::bind(&Stash_Client::on_connect, this, std::placeholders::_1, std::placeholders::_2));
+        }
+
+
+        void on_connect(boost::system::error_code error, boost::asio::ip::tcp::endpoint const& endpoint)
+        {
+            std::cout << "Connect: " << error.message() <<  "\n";
+            std::cout << "Endpoint: " << endpoint << "\n";
+            if (m_command == "push")
+                boost::asio::async_write(m_socket, boost::asio::buffer("push 2\n"), std::bind(&Stash_Client::on_write, this, std::placeholders::_1, std::placeholders::_2));
+            else if (m_command == "pull")
+                boost::asio::async_write(m_socket, boost::asio::buffer("dummy pull\n"), std::bind(&Stash_Client::on_write, this, std::placeholders::_1, std::placeholders::_2));
+        }
+
+        void on_write(boost::system::error_code error, std::size_t bytes_transferred)
+        {
+            std::cout << "Write: " << error.message() << ", bytes transferred: " << bytes_transferred << "\n";
         }
 
         std::size_t get_stash_size ()
@@ -35,14 +48,17 @@ class Stash_Client
         }
 
     public:
-        Stash_Client() : m_socket(m_io_context) // Create socket and associate with <m_io_context>
+        Stash_Client(boost::asio::io_context& io_context, std::string command, std::filesystem::path stash_path = "Stash", std::string const& hostname = boost::asio::ip::host_name(), std::string port = "3490")
+            : m_command{command}, m_stash_path{stash_path}, m_resolver(io_context), m_socket(io_context)
         {
             if (not std::filesystem::exists(m_stash_path))
             {
                 std::filesystem::create_directory(m_stash_path);
             }
+            m_resolver.async_resolve(hostname, port, std::bind(&Stash_Client::on_resolve, this, std::placeholders::_1, std::placeholders::_2));
         }
 
+/*
         // Currently reads entire file into vector; send in pieces?
         void send_file(const std::filesystem::directory_entry & file)
         {
@@ -93,36 +109,36 @@ class Stash_Client
 
             std::cout << "Stash_Client: Finished pull.\n";
         }
+*/
 };
 
+
 // Check input to main
-void verify_input(int argc, char** argv)
+std::string verify_input(int argc, char** argv)
 {
-    if ((argc != 2) or (std::string(argv[1]) != "push" and std::string(argv[1]) !="pull"))
+    if (argc != 2)
+        throw "Usage is 'stash push' or 'stash pull'\n";
+    std::string command {std::string(argv[1])};
+    if (command != "push" and command !="pull")
     {
         throw "Usage is 'stash push' or 'stash pull'\n";
     }
+    return command;
 }
 
-int main(int argc, char* argv [])
+
+int main(int argc, char** argv)
 {
-    try
-    {
-        verify_input(argc, argv);
-        Stash_Client client;
-        client.push();
-    }
-    catch (std::exception& e)
-    {
-        std::cerr << "\tError in " << e.what() << std::endl;
-    }
-    catch (const char* e)
-    {
-        std::cerr << "\tError in " << e << std::endl;
-    }
-    catch (...)
-    {
-        std::cerr << "\nStash_client: an unexpected exception occurred.\n";
-    }
-    return 0;
+  try
+  {
+    boost::asio::io_context io_context;
+    Stash_Client client(io_context, verify_input(argc, argv));
+    io_context.run();
+  }
+  catch (std::exception& e)
+  {
+    std::cerr << "Exception: " << e.what() << std::endl;
+    return 1;
+  }
+  return 0;
 }
